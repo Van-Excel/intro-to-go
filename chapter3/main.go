@@ -17,12 +17,19 @@ func main() {
 
 	//declare variable
 	var school string
+
+	// initialize variable
 	school = "alpha beta"
+
 	fmt.Println("name of school:", school)
 	school = "martin de porres"
 	fmt.Println("name of new school is:", school)
 	fmt.Println("is your school alpha beta?", school == "alpha beta")
 	outOfScope()
+
+	//constants
+	const dob = "23-10-1997"
+	const Pi float64 = 3.147
 
 	// variables are mappings of human readable names to memory addresses
 	// you are essentially telling the compiler to allocate some space
