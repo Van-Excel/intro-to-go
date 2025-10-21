@@ -4,6 +4,9 @@ import (
 	"fmt"
 )
 
+// this variable can be accessed by other functions
+var phone = "233531889081"
+
 func main() {
 
 	var fName string = "Vanexcel"
@@ -19,8 +22,13 @@ func main() {
 	school = "martin de porres"
 	fmt.Println("name of new school is:", school)
 	fmt.Println("is your school alpha beta?", school == "alpha beta")
+	outOfScope()
 
 	// variables are mappings of human readable names to memory addresses
 	// you are essentially telling the compiler to allocate some space
 	// and map the address of that memory block to a human readable name
+}
+
+func outOfScope() {
+	fmt.Println("phone number:", phone)
 }
