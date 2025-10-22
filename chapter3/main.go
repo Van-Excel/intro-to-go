@@ -27,6 +27,11 @@ func main() {
 	fmt.Println("is your school alpha beta?", school == "alpha beta")
 	outOfScope()
 
+	// fmt.Println("Enter a word:")
+	// var scannedValue string
+	// fmt.Scanf("%s", &scannedValue)
+	// fmt.Println("the scanned word is:", scannedValue)
+
 	//constants
 	const dob = "23-10-1997"
 	const Pi float64 = 3.147
@@ -34,8 +39,28 @@ func main() {
 	// variables are mappings of human readable names to memory addresses
 	// you are essentially telling the compiler to allocate some space
 	// and map the address of that memory block to a human readable name
+
+	//TASKS
+	// write a program that converts from fahrenheit to celcius
+	// calling function
+	fmt.Println("Enter the temperature you want to convert to celcius")
+	var userInput float64
+	fmt.Scanf("%f", &userInput)
+	fmt.Println("the user input is:", userInput)
+	convertFahrenheitToCelcius(userInput)
 }
 
 func outOfScope() {
 	fmt.Println("phone number:", phone)
+}
+
+//TASKS
+// write a program that converts from fahrenheit to celcius
+
+func convertFahrenheitToCelcius(temperature float64) float64 {
+	var convertedInput float64 = (temperature - 32) * 5 / 9
+	fmt.Printf("the value of %f fahrenheit converted to celcius is %f", temperature, convertedInput)
+
+	return convertedInput
+
 }
