@@ -54,4 +54,53 @@ func main() {
 
 	}
 
+	//switch statement
+	// used when there are many conditions
+
+	condition := 2
+
+	if condition == 1 {
+		fmt.Println("one")
+	} else if condition == 2 {
+		fmt.Println("two")
+	} else if condition == 3 {
+		fmt.Println("three")
+	} else if condition == 4 {
+		fmt.Println("four")
+	} else if condition == 5 {
+		fmt.Println("five")
+	}
+
+	switch 25 / 5 {
+	case 1:
+		fmt.Println("one")
+	case 2:
+		fmt.Println("two")
+	case 3:
+		fmt.Println("three")
+	case 4:
+		fmt.Println("four")
+	case 5:
+		fmt.Println("five")
+	}
+
+	/*
+			TASK
+			Write a program that prints the numbers from 1 to 100, but for multiples of
+		    three, print “Fizz” instead of the number, and for the multiples of five, print
+		    “Buzz.” For numbers that are multiples of both three and five, print “FizzBuz */
+
+	for fiz := 1; fiz <= 100; fiz++ {
+		if fiz%3 == 0 {
+			fmt.Println("Fizz")
+		} else if fiz%5 == 0 {
+			fmt.Println("buzz")
+		} else if fiz%5 == 0 && fiz%3 == 0 {
+			fmt.Println("fizzBuzz")
+		} else {
+			fmt.Println(fiz)
+		}
+
+	}
+
 }
