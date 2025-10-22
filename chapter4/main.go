@@ -4,6 +4,16 @@ import (
 	"fmt"
 )
 
+// Blocks of code are fundamental to programming —
+// they let us model real-world actions, tasks, and logic.
+// When we need to repeat a task multiple times, we use loops (for, while, or do-while),
+// depending on whether we know the number of iterations in advance or not.
+// To make decisions about whether or not to perform a task, we use conditional statements like if.
+/*
+We can combine if statements and loops to perform tasks conditionally and repeatedly,
+depending on specific criteria or the number of iterations
+*/
+
 func main() {
 	fmt.Println("chapter 4")
 	// control structures
@@ -24,6 +34,23 @@ func main() {
 
 	for count := 1; count <= 10; count++ {
 		fmt.Println("count:", count)
+
+	}
+	// create variable to store state
+	// write your conditional expression
+	// create block of code you want to execute when
+	// conditional expression evaluates to true
+	// write state increment/decrement logic - prevents perpetual loop
+
+	// write loop to check if number is even or odd
+	for s := 1; s <= 10; s++ {
+		if s%2 == 0 {
+			fmt.Printf("%d: even\n", s)
+
+		} else {
+			fmt.Printf("%d: odd\n", s)
+
+		}
 
 	}
 
