@@ -52,4 +52,37 @@ func main() {
 	container := [4]int{2, 3, 5, 6}
 	fmt.Println(container)
 
+	// slices
+	//creating a slice
+	// var car []string
+
+	//using make function to create a slice
+	v := make([]string, 5, 8)
+	fmt.Println("length of slice v:", len(v))
+	fmt.Println("capacity of arr:", cap(v))
+	fmt.Println("slice:", v)
+	v[0] = "Local"
+	fmt.Println("slice:", v)
+	//  []string{"van", "ship", "bike"}
+
+	arr := []int{1, 2, 4, 6, 7, 8, 9} // declare and initialize an array
+	s := arr[:4]                      // slice the first 4 items in the array
+	fmt.Println("new slice:", s)
+
+	//append
+
+	arr2 := [8]int{1, 2, 3, 4, 5}
+	slice1 := arr2[0:2]
+	// fmt.Println("first viz of slice:", slice1)
+	fmt.Printf("flen: %d fcapacity:%d fslice: %v\n", len(slice1), cap(slice1), slice1)
+	slice1 = append(slice1, 6, 7)
+	fmt.Printf("len: %d capacity:%d slice: %v\n", len(slice1), cap(slice1), slice1)
+	fmt.Println("array:", arr2)
+
+	//copy
+
+	// map
+
+	// implement a slice on your own
+
 }
