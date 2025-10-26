@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 )
 
@@ -80,8 +81,58 @@ func main() {
 	fmt.Println("array:", arr2)
 
 	//copy
+	slice3 := []int{1, 3, 5}
+	slice4 := make([]int, 2)
+	copy(slice3, slice4)
+	fmt.Println(slice3, slice4)
 
 	// map
+	// unordered collection of key value pairs
+	//also called a hash table or dictionary or associative arrays
+	// noticed in the syntax, the keys are the items in the brackets
+	// followed by a value type
+
+	hashtable := make(map[string]int)
+	hashtable["dog"] = 4
+	hashtable["cat"] = 10
+	fmt.Println((hashtable))
+	result, status := hashtable["tiger"]
+	fmt.Println("result:", result, "status:", status)
+	if !status {
+		fmt.Println("Key doesn't exist in table")
+	}
+
+	//map with int key and person object value with keys name and age
+	workers := make(map[int]map[string]any) // map an integer to a map of str:str
+	workers[1] = make(map[string]any)
+	workers[1]["name"] = "Adjoa"
+	workers[1]["age"] = 23
+	fmt.Println(workers)
+	//safe way with any is type assertion
+	worker, ok := workers[1]["age"].(int) // checks if value is int before extraction
+	if ok {
+		fmt.Println(worker)
+
+	}
+
+	// initializing outer map and then inner map
+	// Create the outer map
+	employees := make(map[int]map[string]string)
+
+	// Initialize inner maps one by one
+	employees[1] = make(map[string]string)
+	employees[1]["name"] = "Kofi"
+	employees[1]["age"] = "34"
+
+	employees[2] = make(map[string]string)
+	employees[2]["name"] = "Ama"
+	employees[2]["age"] = "28"
+
+	//use case - serialization
+	var d map[string]any
+	jsonData := `{"name":"excel", "age":"23"}`
+	json.Unmarshal([]byte(jsonData), &d)
+	fmt.Println(d)
 
 	// implement a slice on your own
 
