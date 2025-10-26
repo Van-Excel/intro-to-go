@@ -135,5 +135,6 @@ func main() {
 	fmt.Println(d)
 
 	// implement a slice on your own
+	// study generics, interfaces, any, type assertion
 
 }
