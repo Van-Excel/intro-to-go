@@ -60,6 +60,7 @@ func main() {
 	fmt.Println("employee speaking:", e.speak())
 
 	//creating humans for employees slice
+	// append doesn't overwrite default zero values
 	h1 := Human{name: "Kojo", age: 23, nationality: "Ghanaian"}
 	h2 := Human{name: "Chibeke", age: 23, nationality: "Nigerian"}
 	h3 := Human{name: "Ama", age: 20, nationality: "Ghanaian"}
@@ -70,5 +71,8 @@ func main() {
 
 	humanbeings := []HumanBeing{e1, e2, e3}
 	fmt.Println(allEmployees(humanbeings...))
+
+	//designing with patterns
+	// generics,interfaces, decorators, adaptors, middleware
 
 }
