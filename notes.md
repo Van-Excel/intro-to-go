@@ -269,10 +269,11 @@ TASKS
 -implement OOP and services
 -resume build your own redis
 
--networks, servers, connections and sockets
+-networks, servers,loops, connections and sockets
 - data serialization
-- reading data and parsers (strings, numbers, objects)
+- reading data, io, and parsers (strings, numbers, objects)
 - http and how to parse a http request and create an http response
+- protocols: redis, http, custom
 - handlers and threads
 - routing
 
