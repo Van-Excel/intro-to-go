@@ -249,3 +249,31 @@ Tcp or os layer arranges bytes (lets say http message) and stores in buffer of s
 we can now parse this into a struct and use the data
 
 How does this apply to custom protocols and serialisation and deserialisation in general?
+
+SERVICES
+Services are generally long lived processes that have a listening socket. This socket which represents
+a network connection listens for client requests to connect to the sockets of clients on other hosts across a network. It also has a read and write buffer or a send and receive buffer. These are like files. The read buffer is for receiving messages from a connected client similar to the concept of a message inbox. the send buffer is for writing messages for the OS to send to the client's socket using the network stack.
+Services run on hosts or end systems which operate multiple processes or services so services are mapped to ports to help identify the service or process a message is for (remember the 4 tuples that describe a network connection)
+service basically call socket(), bind(), listen(), accept(), parse read data and pass it to handler
+service -> handler -> database
+-Think about how certain requests may consist of multiples services or processes across multiple hoss and networks communicating together and how it affects latency, nature of service workload, etc
+-Think about how important TCP connections and lifecycles, multiprocessing, threads, blocking and non blocking calls, Multiplexed IO are to services
+
+
+TASKS
+- implement api
+- practise db connection and execution
+-implement router
+- learn http parsing
+- revise servers (non blocking IO, multiplexing, event loops) and data serialisation( custom protocols, redis protocol)
+-implement OOP and services
+-resume build your own redis
+
+-networks, servers, connections and sockets
+- data serialization
+- reading data and parsers (strings, numbers, objects)
+- http and how to parse a http request and create an http response
+- handlers and threads
+- routing
+
+4 months: make good judgments
