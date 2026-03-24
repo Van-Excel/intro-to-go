@@ -12,7 +12,67 @@ this is important to understanding the types of servers and frameworks
 you are essentially asking is there data in the kernel buffer?
 
 sync blocking
-you ask and if there is none you wait
+you ask and if there is none you wait. thread is blocked and sent to wait queue. its not even eligible to be rescheduled by OS
+when the data is finally in the kernel buffer, it will be notified and its state is changed and it is placed on the ready queue. it can now use the processor during its turn. continues where it was in read()- copying data to userspace and returns the number of bytes read
+Great notes. To your question — no, it does not block again.
+
+Here is why:
+The thread was blocked precisely because data was NOT in the kernel buffer. That was the only reason it was waiting.
+When it wakes up and calls read() again:
+thread wakes up (data is now in kernel buffer)
+    │
+    calls read() → syscall → switches to kernel mode
+    │
+    kernel checks: is data in buffer?
+    YES → copies immediately: kernel buffer → your buf
+    │
+    returns to user mode
+    │
+    thread continues
+Data is already there. Nothing to wait for. The copy is fast — microseconds. No reason to block.
+
+Blocking only happens when:
+read() called
+    │
+    kernel checks buffer
+    │
+    EMPTY → block thread, put in wait queue
+    HAS DATA → copy immediately, return, no blocking
+It is a conditional block. Not a guaranteed block every time.
+
+The full precise sequence:
+1. thread calls read()
+2. kernel checks socket buffer → empty
+3. thread state: RUNNING → WAITING
+4. thread off CPU, in wait queue
+        │
+        ... time passes ...
+        │
+5. data arrives from network → lands in kernel socket buffer
+6. kernel wakes thread: WAITING → READY
+7. scheduler picks thread → READY → RUNNING
+8. thread is now back in read() syscall (it never fully returned)
+9. kernel copies: socket buffer → user buf
+10. read() returns n bytes
+11. thread continues in user mode
+
+Key insight on step 8:
+The thread never fully left read(). It blocked inside the syscall. When it wakes up it just continues where it left off inside the kernel — does the copy and returns. It does not call read() a second time.
+thread calls read()
+    │
+    enters kernel mode
+    │
+    checks buffer → empty → sleeps HERE inside kernel
+                                    │
+                            data arrives
+                                    │
+                            wakes up HERE, still inside kernel
+                            does copy
+                            │
+    returns to user mode with data
+One read() call, one return. The blocking happened silently inside.
+
+
 
 sync non blocking- returns immediately so you keep polling which burns cycles.Why? because when the thread is contexted switched it doesn't go into the wait queue or sleep but into the ready queue where it is continuously scheduled till the syscall(read()) returns a read value.
 you can instead use epoll() which will make thread sleep but wake it up when there is data in kernel buffer
