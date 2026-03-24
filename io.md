@@ -1,5 +1,13 @@
+other questions
+-file atomicity and concurrency
+- what happens if 2 more thread are writing to the same file offset
+
+
+
+
 
 analogy
+this is important to understanding the types of servers and frameworks
 you are essentially asking is there data in the kernel buffer?
 
 sync blocking
@@ -1222,3 +1230,47 @@ EOF means	end of file, definite	client closed connection
 message boundary	the file itself	protocol must define it
 partial reads	still happen	happen more frequently
 This is why HTTP/1.1 made Content-Length mandatory for responses with a body — so the client knows exactly when the message ends without closing the connection, allowing keep-alive and pipelining multiple requests over one socket.
+
+realised how important this knowledge is to understanding the types of servers and frameworks
+
+8:21 AM
+Exactly. Everything clicks once you have this foundation.
+
+What you can now reason about:
+
+Apache (old model)
+
+one thread per connection
+thread blocks on read()
+1000 connections = 1000 threads sleeping
+doesn't scale → "C10K problem"
+Nginx / Node.js
+
+event loop + epoll
+one thread, OS watches all connections
+wakes up only when data arrives
+scales to 100k+ connections easily
+io_uring based servers (modern)
+
+OS does reads/writes itself
+app just processes completions
+fewer syscalls, lower latency
+bleeding edge, used in high freq trading etc
+Frameworks now make sense too:
+
+framework	model	why
+Django/Flask default	blocking threads	simple, low traffic
+FastAPI / async Python	epoll + async/await	high concurrency
+Node.js	event loop + epoll	I/O heavy workloads
+Go	goroutines + epoll under hood	best of both worlds
+Nginx	event loop	why it beats Apache at scale
+Redis	single thread + epoll	why it handles 1M ops/sec
+Redis is a great example:
+
+Single threaded, no parallelism at all, yet handles 1 million operations per second. Pure event loop — operations are so fast (in-memory) that the event loop never gets blocked. Shows that threading isn't always the answer.
+
+The deeper insight you've reached:
+
+Most developers use these frameworks without understanding why one scales and another doesn't. You now understand it at the syscall level — read(), epoll, kernel buffers, context switching, thread states.
+
+That's the difference between knowing how to use a tool and knowing why it works.
