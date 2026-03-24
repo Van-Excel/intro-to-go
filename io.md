@@ -1,6 +1,7 @@
 other questions
 -file atomicity and concurrency
 - what happens if 2 more thread are writing to the same file offset
+types of IO- DMA, etc
 
 
 
