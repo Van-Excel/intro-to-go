@@ -170,6 +170,74 @@ copy(dst, src)             // builtin but needs dst
 encoding/json is the same — you provide the buffer, it writes into it. The rule is: if it's a package function, expect to manage your own memory.
 
 
+
+FILES, STREAMS, READALL()
+---------------------------------
+difference between a stream and file on disk
+
+A file on disk is static — all the data is already there, you know its size upfront, and you can jump to any position (seek forward, backward, random access).
+
+A stream is dynamic — data arrives sequentially over time, you often don't know the total size upfront, and you can only read forward. You get the data as it arrives, chunk by chunk.
+
+So for an HTTP response body:
+
+The server is sending data over the network piece by piece
+You don't know how much is coming until it's done
+You can't jump to the middle of it
+That's why io.ReadAll keeps reading until EOF — it's waiting for the stream to finish delivering all its data before handing it all back to you as a complete []byte.
+
+if we dont know size, how do we know eof? from content length header? and for sockets or just tcp connections when do we know we have reached eof
+
+9:48 AM
+Great question. There are a few ways EOF is determined:
+
+For HTTP:
+
+Content-Length header — if the server sends this, the client knows exactly how many bytes to expect and stops after reading that many
+Chunked transfer encoding — if no Content-Length, the server sends data in chunks, each prefixed with its size, and a final chunk of size 0 signals EOF
+Connection close — the server just closes the connection when done, and that closure signals EOF
+For raw TCP:
+
+EOF is signaled when the other side calls close() on the socket, which sends a FIN packet
+When you receive the FIN, your Read call returns 0 bytes and an io.EOF error
+There's no concept of "message boundaries" in raw TCP — it's just a continuous stream of bytes, so the application layer has to define its own protocol for knowing when a message is complete (like HTTP does with Content-Length or chunked encoding)
+So at the TCP level it's always the FIN packet, but higher level protocols like HTTP build their own signaling on top of that.
+
+when do we use chunked transfer encoding
+
+9:49 AM
+Chunked transfer encoding is used when the server doesn't know the total size of the response before it starts sending — i.e. the content is being generated dynamically.
+
+Common cases:
+
+Dynamically generated pages — server is building the HTML on the fly from database queries, it doesn't know the final size until it's done
+Streaming responses — like server-sent events, video streaming, or LLM responses (like this one) where data is produced and sent progressively
+Large file compression on the fly — server is compressing while sending, so it doesn't know the compressed size upfront
+Database query results — server starts streaming rows before the full query finishes
+Basically the rule is:
+
+Know the size upfront → use Content-Length
+Don't know the size upfront → use chunked transfer encoding
+A good real world example you'd know — when Claude responds to you, the response is streamed back chunk by chunk as the model generates tokens. The server has no idea how long the response will be when it starts sending, so chunked encoding is used.
+
+so basically readall is a loop for read until it returns 0 or EOF
+
+9:51 AM
+Yes exactly. Under the hood io.ReadAll is essentially:
+
+go
+for {
+    n, err := reader.Read(buf)
+    // append buf[:n] to result
+    if err == io.EOF {
+        break
+    }
+}
+Keep reading chunks into a buffer, accumulating them, until Read signals EOF — then return everything accumulated as a single []byte.
+
+
+
+
 ROUTER
 router or ServerMux is a router
 we have a server that orchestrates the network layer, reads data and hands it to a handler or 
@@ -267,14 +335,29 @@ TASKS
 - learn http parsing
 - revise servers (non blocking IO, multiplexing, event loops) and data serialisation( custom protocols, redis protocol)
 -implement OOP and services
--resume build your own redis
+-resume build your own redis (learn kafka clone fork)
+- resume build your own db (learn badgerdb fork)
 
 -networks, servers,loops, connections and sockets
-- data serialization
+- data serialization(protocols, character sets and encodings), 
 - reading data, io, and parsers (strings, numbers, objects)
 - http and how to parse a http request and create an http response
-- protocols: redis, http, custom
+- application level protocols: redis, http, custom
 - handlers and threads
 - routing
+- security (TLS)
+
+
+CONCURRENCY
+-----------
+Process -> Threads -> user level threads
+We start with processes but they are expensive and can be time consuming so we use threads
+Threads are lighter or less expensive than processes but they introduce race conditions
+We use synchronization methods to tackle race conditions
+These sometimes lead to deadlocks and spinlocks?
+We also have threading models: 1:N and M:N
+
+
+
 
 4 months: make good judgments
