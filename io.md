@@ -8,7 +8,9 @@ types of IO- DMA, etc
 
 
 analogy
-this is important to understanding the types of servers and frameworks
+-this is important to understanding the types of servers and frameworks
+-does it apply to writes?
+- for epoll if thread is put to sleep, when does it loop through fds and do work?
 you are essentially asking is there data in the kernel buffer?
 
 sync blocking
@@ -1335,3 +1337,360 @@ The deeper insight you've reached:
 Most developers use these frameworks without understanding why one scales and another doesn't. You now understand it at the syscall level — read(), epoll, kernel buffers, context switching, thread states.
 
 That's the difference between knowing how to use a tool and knowing why it works.
+
+
+--------------
+EVENT LOOP
+-------------
+
+
+finally understanding things
+so for epoll we basically have a better strategy for sync non blokcing which uses polling
+instead of polling and wasting cpu cycles, we let os monitor files and we put thread to sleep
+so when do we loop through fds to do work? or is that the event loop?
+
+8:56 AM
+Exactly. The event loop is the loop through ready fds.
+
+The flow:
+
+c
+while (1) {                              // event loop
+    
+    int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
+    // thread sleeps here until OS says something is ready
+    // -1 means wait forever
+    
+    for (int i = 0; i < n; i++) {        // loop through READY fds
+        handle(events[i].data.fd);       // only fds with data
+    }
+    
+    // back to sleep
+}
+```
+
+---
+
+**The key difference from naive polling:**
+```
+naive polling                        epoll
+─────────────────────────────        ──────────────────────────
+loop through ALL fds                 OS gives you ONLY ready fds
+check each one                       no checking needed
+most return EAGAIN                   every fd in list has data
+wasteful                             efficient
+```
+```
+naive:                               epoll:
+fd1 → EAGAIN (no data)               epoll_wait() returns [fd3, fd7]
+fd2 → EAGAIN                         handle fd3 → data guaranteed
+fd3 → has data, handle               handle fd7 → data guaranteed
+fd4 → EAGAIN                         back to sleep
+fd5 → EAGAIN
+...
+fd10000 → EAGAIN
+```
+
+---
+
+**So the event loop is just:**
+```
+sleep until OS says fds are ready
+    │
+loop through only the ready ones
+    │
+handle each
+    │
+back to sleep
+```
+
+No wasted iterations. No EAGAIN. Every fd you touch has data waiting.
+
+---
+
+**This is the complete picture now:**
+```
+your app registers fds with epoll
+        │
+        epoll_wait() → thread sleeps (like blocking)
+        │
+        data arrives on some fds
+        │
+        OS wakes thread with list of ready fds
+        │
+        loop through ready fds
+        │
+        read() on each → guaranteed data → fast copy
+        │
+        handle data, run callbacks
+        │
+        back to epoll_wait() → sleep again
+You get the efficiency of blocking (thread sleeps, no CPU waste) with the scale of non-blocking (one thread, many connections, never stuck on one fd).
+
+what is n? fd or num of bytes read?
+
+8:57 AM
+n here is the number of ready file descriptors returned by epoll_wait().
+
+c
+int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
+//  │
+//  └── how many fds are ready, not bytes
+So the loop is:
+
+c
+for (int i = 0; i < n; i++) {
+    // events[i] is one ready fd
+    handle(events[i].data.fd);
+}
+```
+
+If 3 clients sent data simultaneously:
+```
+n = 3
+events[0].data.fd = 42  (client 1)
+events[1].data.fd = 17  (client 2)
+events[2].data.fd = 91  (client 3)
+The actual bytes read happens inside handle():
+
+c
+void handle(int fd) {
+    char buf[1024];
+    int n = read(fd, buf, sizeof(buf)); // n here = bytes read
+    // different n — this one is bytes
+    doSomething(buf, n);
+}
+Two different ns, easy to confuse:
+
+what n means
+epoll_wait() return	number of ready fds
+read() return	number of bytes read
+Good catch — naming them the same in examples is a common source of confusion. In real code you'd name them clearly like nready and nbytes.
+
+whcih means events is some struct or data structure which contains the ready fds?
+
+9:00 AM
+Yes exactly. events is an array of epoll_event structs.
+
+The struct:
+
+c
+typedef union epoll_data {
+    void        *ptr;
+    int          fd;      // ← the file descriptor
+    uint32_t     u32;
+    uint64_t     u64;
+} epoll_data_t;
+
+struct epoll_event {
+    uint32_t     events;  // ← what happened (readable? writable? error?)
+    epoll_data_t data;    // ← your fd and any extra data you attached
+};
+How you use it:
+
+c
+// declare array to hold ready events
+struct epoll_event events[MAX_EVENTS];
+
+// epoll_wait fills this array with ready fds
+int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
+
+// loop through ready ones
+for (int i = 0; i < n; i++) {
+    int fd = events[i].data.fd;        // which fd is ready
+    uint32_t ev = events[i].events;    // what happened to it
+
+    if (ev & EPOLLIN) {
+        // data available to read
+        read(fd, buf, size);
+    }
+    if (ev & EPOLLOUT) {
+        // fd is ready to write
+        write(fd, buf, size);
+    }
+    if (ev & EPOLLERR) {
+        // error on fd
+        close(fd);
+    }
+}
+The events flags tell you what happened:
+
+flag	meaning
+EPOLLIN	data available, ready to read
+EPOLLOUT	ready to write (buffer not full)
+EPOLLERR	error occurred
+EPOLLHUP	connection hung up
+EPOLLET	edge triggered mode
+How fds get into the events array in the first place:
+
+You register them with epoll_ctl() beforehand:
+
+c
+// create epoll instance
+int epfd = epoll_create1(0);
+
+// register a fd to watch
+struct epoll_event ev;
+ev.events = EPOLLIN;        // watch for incoming data
+ev.data.fd = client_fd;     // which fd to watch
+
+epoll_ctl(epfd, EPOLL_CTL_ADD, client_fd, &ev);
+// now OS is watching client_fd
+// when data arrives it will appear in epoll_wait results
+```
+
+---
+
+**Full picture:**
+```
+epoll_create1()  → create epoll instance (epfd)
+    │
+epoll_ctl()      → register fds to watch
+    │
+epoll_wait()     → sleep until some fds are ready
+    │              fills events[] array with ready ones
+loop events[]    → handle each ready fd
+    │
+back to epoll_wait()
+write same code in go and pythong
+
+9:02 AM
+Go:
+
+go
+package main
+
+import (
+    "fmt"
+    "net"
+    "os"
+)
+
+func main() {
+    listener, err := net.Listen("tcp", ":8080")
+    if err != nil {
+        fmt.Println(err)
+        os.Exit(1)
+    }
+    defer listener.Close()
+    fmt.Println("listening on :8080")
+
+    for {
+        conn, err := listener.Accept() // blocks waiting for connection
+        if err != nil {
+            fmt.Println(err)
+            continue
+        }
+        go handleConn(conn) // spawn goroutine per connection
+    }
+}
+
+func handleConn(conn net.Conn) {
+    defer conn.Close()
+    buf := make([]byte, 1024)
+
+    for {
+        n, err := conn.Read(buf) // blocks waiting for data
+        if err != nil {
+            return
+        }
+        fmt.Printf("received: %s\n", buf[:n])
+        conn.Write(buf[:n]) // echo back
+    }
+}
+Go looks like blocking code per connection but under the hood the runtime converts it to epoll + goroutine scheduling. You get simple code and event loop efficiency.
+
+Python (explicit async/await):
+
+python
+import asyncio
+
+async def handle_conn(reader, writer):
+    addr = writer.get_extra_info('peername')
+    print(f"connection from {addr}")
+
+    while True:
+        data = await reader.read(1024)  # non-blocking, yields to event loop
+        if not data:
+            break
+        print(f"received: {data.decode()}")
+        writer.write(data)             # echo back
+        await writer.drain()           # wait for write buffer to flush
+
+    writer.close()
+
+async def main():
+    server = await asyncio.start_server(
+        handle_conn, '0.0.0.0', 8080
+    )
+    print("listening on :8080")
+    async with server:
+        await server.serve_forever()   # event loop runs here
+
+asyncio.run(main())
+```
+
+---
+
+**The contrast is interesting:**
+
+| | C epoll | Go | Python asyncio |
+|---|---|---|---|
+| epoll visible | yes, explicit | hidden in runtime | hidden in event loop |
+| code style | manual, verbose | looks blocking | explicit async/await |
+| concurrency | you manage | goroutines | coroutines |
+| who manages event loop | you | Go runtime | asyncio |
+| performance | highest | very high | moderate |
+
+---
+
+**Key insight:**
+
+All three use epoll under the hood on Linux. The difference is just how much of it is hidden from you:
+```
+C epoll         → you write the event loop yourself
+Python asyncio  → event loop hidden, but async/await visible in your code
+Go              → everything hidden, looks like normal blocking code
+
+got it now
+so an event loop is just the loop that loops through the ready fds to do some work with them
+
+9:04 AM
+Yes exactly. That's the most precise definition.
+
+c
+while (1) {                          // "event loop"
+    int n = epoll_wait(...);         // sleep until fds ready
+    for (int i = 0; i < n; i++) {   // loop through ready fds
+        handle(events[i].data.fd);  // do work
+    }
+}
+```
+
+That's it. Nothing magical.
+
+---
+
+The word "event" just means "something happened on an fd":
+- client sent data → read event
+- fd ready to write → write event  
+- connection closed → hangup event
+- error occurred → error event
+
+"Event loop" = loop that handles these fd events.
+
+---
+
+**All the fancy frameworks are just this loop with abstractions on top:**
+```
+Node.js event loop     →  libuv wrapping epoll
+Python asyncio         →  selectors wrapping epoll
+Go runtime             →  netpoller wrapping epoll
+Nginx worker           →  epoll loop
+Redis main loop        →  epoll loop
+```
+
+Strip away the abstractions and every single one of them is:
+```
+sleep until fds ready → loop through ready fds → handle them → repeat
+You now understand what most developers using these frameworks never bother to look into.
