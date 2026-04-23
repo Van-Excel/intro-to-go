@@ -169,6 +169,283 @@ json.Unmarshal(buf, &v)    // encoding/json
 copy(dst, src)             // builtin but needs dst
 encoding/json is the same — you provide the buffer, it writes into it. The rule is: if it's a package function, expect to manage your own memory.
 
+explain how scanf works in go
+does it read from a terminal(file) and then write to some location for us
+does it have to write to a variable or it can write to a file
+
+4:32 PM
+Good question. Let me break down exactly what Scanf does.
+
+What Scanf actually is
+fmt.Scanf reads formatted input from standard input (stdin) and writes the parsed values into variables you provide via pointers.
+
+go
+var name string
+var age int
+
+fmt.Scanf("%s %d", &name, &age)
+```
+
+Two distinct things are happening:
+```
+stdin (keyboard/terminal)  →  Scanf reads raw bytes
+                           →  parses according to format string
+                           →  writes parsed values into &name and &age
+Your question — does it have to write to a variable?
+It writes to any memory address you give it via a pointer. A variable is the most common case but the mechanism is just pointer writes.
+
+go
+// writing to a variable — most common
+var amount float64
+fmt.Scanf("%f", &amount)
+
+// writing to a struct field — same mechanism
+type Investor struct {
+    Name   string
+    Amount float64
+}
+inv := Investor{}
+fmt.Scanf("%s %f", &inv.Name, &inv.Amount)
+
+// writing to a slice element
+amounts := make([]float64, 5)
+fmt.Scanf("%f", &amounts[0])
+All of these are just pointers. Scanf does not know or care that it is a variable, struct field, or slice element — it just writes to the address you give it.
+
+Can it write to a file?
+Not directly — Scanf is hardcoded to read from stdin. But the fmt package has Fscanf which accepts any io.Reader as the source:
+
+go
+// Scanf — always reads from stdin
+fmt.Scanf("%s", &name)
+
+// Fscanf — reads from any io.Reader
+file, _ := os.Open("investors.txt")
+fmt.Fscanf(file, "%s %f", &name, &amount)
+
+// Sscanf — reads from a string
+data := "John 5000.00"
+fmt.Sscanf(data, "%s %f", &name, &amount)
+```
+
+The write target is always a pointer you provide — what changes between `Scanf`, `Fscanf`, and `Sscanf` is only the **source** being read from.
+
+---
+
+## The full picture
+```
+SOURCE                    FUNCTION       TARGET
+─────────────────────────────────────────────────
+stdin (terminal)      →   Scanf      →   &variable
+any io.Reader (file)  →   Fscanf     →   &variable
+string                →   Sscanf     →   &variable
+The write target is always a pointer to memory — variable, struct field, or slice element. The source is what varies. Scanf itself cannot write to a file — that is what os.File and io.Writer are for, which is a completely separate concern.
+
+Yes, exactly. %s in Scanf reads until it hits whitespace — space, tab, or newline.
+What happened
+input:  "vab exe\n"
+%s      reads  "vab"  → stops at the space
+" exe"  is still sitting in stdin buffer, unread
+
+The stdin buffer is the key mental model
+Scanf does not consume all of stdin. It reads only what the format string asks for and leaves the rest in the buffer.
+before Scanf:   [ v | a | b |   | e | x | e | \n ]
+                                ↑
+after %s:       [   | e | x | e | \n ]  ← these are still in buffer
+                ↑
+                next Scanf call will start reading from here
+This causes subtle bugs — a second Scanf call would read exe from the leftover buffer without waiting for new input.
+
+How to read a full line including spaces
+go// option 1 — bufio.Scanner, most common in Go
+scanner := bufio.NewScanner(os.Stdin)
+fmt.Print("enter your name: ")
+scanner.Scan()
+name := scanner.Text()  // reads entire line, strips newline
+fmt.Println("user entered:", name)
+
+// option 2 — bufio.Reader
+reader := bufio.NewReader(os.Stdin)
+fmt.Print("enter your name: ")
+name, _ := reader.ReadString('\n')  // reads until newline
+name = strings.TrimSpace(name)      // strip the trailing \n
+```
+
+---
+
+## The format verbs and what they stop at
+```
+%s      →  stops at any whitespace (space, tab, newline)
+%d      →  stops at any non-digit character
+%f      →  stops at any non-numeric character
+%v      →  same as %s for strings — stops at whitespace
+So Scanf is really designed for whitespace delimited tokens, not full lines. For anything involving spaces — names, addresses, descriptions — bufio.Scanner is the right tool.
+
+Using Scanf in a loop
+govar fullName string
+var part string
+
+fmt.Print("enter your name: ")
+for {
+    n, err := fmt.Scanf("%s", &part)
+    if n == 0 || err != nil {
+        break
+    }
+    // check if we should stop — but how do we detect newline?
+    fullName += part + " "
+}
+fmt.Println("user entered:", strings.TrimSpace(fullName))
+The problem here is fundamental — %s already consumed the whitespace delimiter so you never actually see it. By the time Scanf returns, the space is gone. You cannot check for the newline because Scanf skipped past it to find the next token.
+You would have to use %c to read character by character:
+govar fullName strings.Builder
+var ch rune
+
+fmt.Print("enter your name: ")
+for {
+    fmt.Scanf("%c", &ch)
+    if ch == '\n' {
+        break
+    }
+    fullName.WriteRune(ch)
+}
+fmt.Println("user entered:", fullName.String())
+This works but it is fighting against what Scanf is designed for. Reading character by character with a format verb is the wrong layer of abstraction.
+
+Why Go has better tools for this
+Scanf comes from C where it made sense because C had limited standard library options. Go was designed with better primitives from the start.
+go// bufio.Scanner — cleanest, most idiomatic
+scanner := bufio.NewScanner(os.Stdin)
+
+fmt.Print("enter your name: ")
+scanner.Scan()
+fullName := scanner.Text()
+fmt.Println("user entered:", fullName)
+```
+
+Internally `scanner.Scan()` is doing the loop and newline detection for you — it just hides the complexity behind a clean API.
+
+---
+
+## The mental model for when to use each
+```
+Scanf           →  reading structured whitespace delimited tokens
+                   "enter age and amount: " → Scanf("%d %f", &age, &amount)
+
+bufio.Scanner   →  reading full lines of text
+                   "enter your name: "      → scanner.Scan()
+
+bufio.Reader    →  reading lines with more control over delimiter
+                   reader.ReadString('\n')
+The rule of thumb is — if your input has spaces that are meaningful content, do not use Scanf. It was designed for tokens separated by whitespace, not for capturing whitespace as part of the value.
+
+println()- adds spaces between args and appends \n at end of args moving cursor to the next line
+print()- does not add space between args or append it with a newline(\n)
+
+https://zetcode.com/golang/inttostring/
+
+difference between Itoa and FormatInt
+What Itoa actually is
+strconv.Itoa is literally just a wrapper around FormatInt:
+go// from Go standard library source
+func Itoa(i int) string {
+    return FormatInt(int64(i), 10)  // always base 10
+}
+That is the entire implementation. Itoa is a convenience function for the most common case — converting an integer to a base 10 string.
+
+What FormatInt gives you that Itoa cannot
+gonumber := int64(255)
+
+// Itoa — base 10 only
+strconv.Itoa(255)                        // "255"
+
+// FormatInt — any base
+strconv.FormatInt(int64(number), 2)      // "11111111"  binary
+strconv.FormatInt(int64(number), 8)      // "377"       octal
+strconv.FormatInt(int64(number), 10)     // "255"       decimal
+strconv.FormatInt(int64(number), 16)     // "ff"        hexadecimal
+strconv.FormatInt(int64(number), 36)     // "73"        base 36
+Any base from 2 to 36 is valid.
+
+The second distinction — type precision
+govar bigNumber int64 = 9223372036854775807  // max int64
+
+strconv.Itoa(int(bigNumber))              // unsafe — int is 32 or 64 bit depending on platform
+strconv.FormatInt(bigNumber, 10)          // always safe — explicitly int64
+```
+
+`Itoa` takes a plain `int` which is platform dependent — 32 bit on 32 bit systems, 64 bit on 64 bit systems. `FormatInt` always takes `int64` so it is explicit and portable.
+
+---
+
+## When to use each
+```
+Itoa            →  simple int to decimal string, most common case
+FormatInt       →  need a specific base (binary, hex, octal)
+                   working explicitly with int64
+                   building things like colour codes, bitmasks, permissions
+A concrete G4M example — loan permission flags stored as bitmasks:
+gopermissions := int64(0b10110101)  // binary flags for loan permissions
+
+// store human readable binary representation for debugging
+strconv.FormatInt(permissions, 2)   // "10110101"
+strconv.FormatInt(permissions, 16)  // "b5"  compact hex for storage
+You could not do this with Itoa at all. So Itoa is the shortcut for the 90% case, FormatInt is the full tool when you need control over the base or explicit int64 handling.
+
+number := 255  // stored in memory as 11111111
+```
+```
+FormatInt(255, 2)   →  "11111111"   string of 8 chars, each char is '1' or '0'
+FormatInt(255, 10)  →  "255"        string of 3 chars, '2','5','5'
+FormatInt(255, 16)  →  "ff"         string of 2 chars, 'f','f'
+```
+
+Same number in memory. Three completely different string representations. None of them are the actual bits — they are all human readable text expressing the same value in different bases.
+
+---
+
+## The cleaner way to see it
+```
+255 in memory is always:   00000000 11111111  (as 16 bit example)
+
+base 2  string  →  "11111111"   how many 1s and 0s do I need to express this value
+base 10 string  →  "255"        how many 0-9 digits do I need to express this value
+base 16 string  →  "ff"         how many 0-f digits do I need to express this value
+
+
+so as a string say "255" is each character 1 byte making it 3 bytes instead of the 16bits representing it in binary?
+
+5:38 PM
+Yes exactly. That is the real cost of stringification.
+
+The memory comparison
+int 255 in memory       →  1 byte (fits in uint8) or 2/4/8 bytes depending on type
+string "255" in memory  →  3 bytes, one per character ('2', '5', '5')
+Each character in a Go string is 1 byte (UTF-8). So:
+
+"255"       →  3 bytes
+"11111111"  →  8 bytes
+"ff"        →  2 bytes
+All represent the same value 255. The binary string representation is actually the most expensive — 8 bytes to represent a number that fits in 1 byte.
+
+This is why you never store numbers as strings
+1 million records, storing an int32 field:
+    as int32    →  4 bytes × 1,000,000  =  4MB
+    as string   →  10 bytes × 1,000,000 =  10MB  ("1000000" is 7 chars + string overhead)
+Databases, binary protocols, and file formats all store numbers in their binary form for exactly this reason.
+
+When stringification makes sense despite the cost
+displaying to a user        →  humans read "255" not raw bytes
+logging                     →  log files are text
+JSON APIs                   →  JSON is text based
+CSV files                   →  text format
+You convert to string at the boundary between your system and humans or text based systems. Internally you keep numbers as numbers.
+
+The general principle
+computation and storage     →  keep as binary int/float
+display, logging, transfer  →  convert to string at the boundary
+Itoa and FormatInt are boundary tools — you reach for them at the edges of your system, not in the middle of it.
+
+
 
 
 FILES, STREAMS, READALL()
