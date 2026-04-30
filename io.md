@@ -81,8 +81,7 @@ you can instead use epoll() which will make thread sleep but wake it up when the
 So here you still call read() again to trigger the copy from kernel buffer to user space buffer
 
 async non blocking- no polling you are notified after kernel copies from NIC into kernel buffer
-you submit your request. kernel will handle copy from NIC -> kernel buffer -> userspace buffer. it will only
-notify after the data is in your buffer so you can use it immediately
+you submit your request. kernel will handle copy from NIC -> kernel buffer -> userspace buffer. it will only notify after the data is in your buffer so you can use it immediately
 async blocking - rarely used
 
 
@@ -125,7 +124,10 @@ aio_read(&cb); // returns immediately, OS does read in background
 You never polled or checked. OS came back to you.
 
 The key difference:
-who checks for completionwhen does caller returnsync blockingyou, by waitingafter operation donesync non-blockingyou, by pollingimmediately, you retryasyncOS notifies youimmediately, forget it
+who checks for completion when does caller return
+sync blocking-you, by waiting after operation is done
+sync non-blocking; you, by polling immediately you retry
+async; OS notifies you immediately, forget it
 
 Concrete analogy:
 You're hungry and waiting for food.
@@ -143,9 +145,11 @@ You are still driving everything. You just sleep efficiently instead of spinning
 True async on Linux is io_uring — you submit read requests to a queue, OS completes them and posts results back. You never call read() yourself.
 
 This is also what JavaScript async/await actually is:
-javascriptconst data = await read(fd); // looks sync, is it?
+javascript 
+const data = await read(fd); // looks sync, is it?
 It's asynchronous non-blocking under the hood — libuv submits the I/O, event loop does other work, callback fires when done. await just makes it look synchronous in your code.but why does sync non blocking return and ask for data immediately? i thought reads always take time or that isnt the case?7:53 AMGood observation. You're right that reads take time — but where that time is spent is the key.
 
+FOR SOCKETS AND NETWORK STREAMS
 The read has two phases:
 client sends data
     │
@@ -250,7 +254,9 @@ read() called
          read() returns data
 
 The critical difference in which queue:
-no data scenarioCPU consumptionblockingWAITING queue, off CPUzero, sleepingnon-blockingREADY queue, keeps getting CPU turnsburns cycles polling
+no data scenario CPU consumption 
+blocking: WAITING queue, off CPU zero, sleeping 
+non-blocking: READY queue, keeps getting CPU time and burns cycles polling
 
 Blocking thread is truly asleep — not consuming anything. Non-blocking thread is restless — keeps getting scheduled, keeps checking, wastes cycles.
 Which is exactly why raw non-blocking polling alone is wasteful, and epoll exists to give you the best of both — non-blocking reads but sleeping efficiently like blocking when there's nothing to do.thread resumes, copies data
@@ -300,9 +306,11 @@ never touches userspace at all
 
 io_uring with zero-copy
 NIC → your buf directly               (1 copy, no kernel buffer)
-This matters a lot for things like video streaming servers sending gigabytes of data — eliminating that extra copy saves significant CPU and memory bandwidth.got it now
-but still some inconsistencies with async model
-what does it mean by you dont do reads yourself but you are just notified. how is it different from sync non blocking aside the polling8:03 AMGood question. Let me make the distinction concrete.
+This matters a lot for things like video streaming servers sending gigabytes of data — eliminating that extra copy saves significant CPU and memory bandwidth.
+
+got it now but still some inconsistencies with async model
+what does it mean by you dont do reads yourself but you are just notified. how is it different from sync non blocking aside the polling
+Good question. Let me make the distinction concrete.
 
 Sync non-blocking (epoll model):
 You are still the one doing the read. epoll just tells you when to do it.
@@ -399,7 +407,7 @@ No syscall per read. OS batched everything. This is why io_uring is significantl
 FORK(), PROCESSES, THREADS
 
 why are the parent process and chil dprocess running
-after fork() a chil dprocess is created by os
+after fork() a child process is created by os
 does it schedule and run immediately?
 
 12:09 AM
@@ -1694,3 +1702,25 @@ Strip away the abstractions and every single one of them is:
 ```
 sleep until fds ready → loop through ready fds → handle them → repeat
 You now understand what most developers using these frameworks never bother to look into.
+
+
+FILES
+read() takes a file and does this:
+it copies data from the file to some buffer or storage unit in the address space of an app
+
+write() takes a file and does this:
+it copies data from some buffer or storage unit in the address space of an app to the file
+
+so both take files to do some work. However the files they take called fd are representations
+or pointers to files in memory which are models of the real files on the disk
+
+so when you perform buffered io what happens is you have a struct or some object type 
+that takes or wraps files or file descriptors or generally pointers or representations
+of these files in memory and you can perform read or write operations on them
+so when you read now you read from the file descriptor to a buffer which is in this struct and when you write you essentially copy data from a buffer in this struct to the file descriptor
+But the difference is the buffer in the struct is now a middle man between the process and the kernels buffer or address space
+
+This is the same design pattern go follows. when a struct or some object wraps a reader or writer you are essentially wrapping a file or a pointer to some file.
+But instead of using objects we are interfaces. we compose objects or types now based on behavior and not the properties of the objects.
+so the read() and write() called are still methods of the wrapped objects
+in the same way sockets, terminals, regular files, etc are called files in linux because they all have some buffers we can read from or write to, go identifies files as any object that implements the reader or writer interface. same idea. All readers and writers have some buffer or storage space you can read from or write to
