@@ -1,3 +1,6 @@
+## RESOURCES
+https://blog.karoko.dev/processing-1-million-transactions-in-under-a-second-using-go-part-1-98c9079375ac
+
 CONCURRENCY
 -----------
 Process -> Threads -> user level threads

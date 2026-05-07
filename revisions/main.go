@@ -95,7 +95,7 @@ func main() { // typical design problem you need to think through
 	fmt.Println("slice2 after mod:", slice2)
 
 	// to add  a new element to slice2 we use append.
-	// create new backing array, copy old elements into it and append new element
+	// create new backing array with 2x cap, copy old elements into it and append new element
 	slice2 = append(slice2, 900)
 
 	// use make if we know either len or both len and future growth but not elements
@@ -116,7 +116,7 @@ func main() { // typical design problem you need to think through
 	x = append(x, 99, 100, 101) // 6 elements total, cap 5 exceeded
 
 	fmt.Println("array for slice x:", x) // [1 2 3 99 100 101] — new backing array!
-	fmt.Println("array for arr:", arr)   // [1 2 3 4 5]          — original UNCHANGED
+	fmt.Println("array for arr:", arr)   // [1 2 3 99 100]          — original changes
 
 	// x[:5] we can also reslice if we want to access last 2 elements
 	// allows us to either read or modify or overwrite it

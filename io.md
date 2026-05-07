@@ -1,3 +1,8 @@
+## RESOURCES
+https://cs.opensource.google/go/go/+/refs/tags/go1.26.2:src/encoding/json/stream.go;l=194
+https://medium.com/golangspec/in-depth-introduction-to-bufio-scanner-in-golang-55483bb689b4
+https://blog.karoko.dev/processing-1-million-transactions-in-under-a-second-using-go-part-1-98c9079375ac
+
 other questions
 -file atomicity and concurrency
 - what happens if 2 more thread are writing to the same file offset
@@ -1716,11 +1721,13 @@ or pointers to files in memory which are models of the real files on the disk
 
 so when you perform buffered io what happens is you have a struct or some object type 
 that takes or wraps files or file descriptors or generally pointers or representations
-of these files in memory and you can perform read or write operations on them
-so when you read now you read from the file descriptor to a buffer which is in this struct and when you write you essentially copy data from a buffer in this struct to the file descriptor
-But the difference is the buffer in the struct is now a middle man between the process and the kernels buffer or address space
+of these files in memory and you can perform read or write operations on them.
+so when you read now you read from the file descriptor to a buffer which is in this struct. You can later transfer or read this data in the struct's buffer into your apps buffer to process it or whatever and when you write you essentially copy data from your apps buffer to this temporary buffer in this struct. That data is later batch written to the file descriptors buffer or storage and then to disk. 
+This buffering of data from and to files is an optimization strategy to improve performance.
+the buffer in the struct is now a middle man between the process and the kernels buffer or address space
 
 This is the same design pattern go follows. when a struct or some object wraps a reader or writer you are essentially wrapping a file or a pointer to some file.
 But instead of using objects we are interfaces. we compose objects or types now based on behavior and not the properties of the objects.
 so the read() and write() called are still methods of the wrapped objects
 in the same way sockets, terminals, regular files, etc are called files in linux because they all have some buffers we can read from or write to, go identifies files as any object that implements the reader or writer interface. same idea. All readers and writers have some buffer or storage space you can read from or write to
+so files are just sequences of bytes. We can copy these bytes to other locations.
